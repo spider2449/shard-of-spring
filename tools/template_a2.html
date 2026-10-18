@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root { --bg:#14120f; --panel:#1c1913; --panel2:#262118; --edge:#463d2f; --ink:#eadfc8; --dim:#9b8f77; --accent:#e0a93c; --led:#ff4d3a; --ok:#7fc77a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #wrap { max-width: 1040px; margin: 0 auto; padding: 12px 16px 28px; }
+  header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0 10px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .5px; font-weight: 600; color: var(--accent); }
+  #model { color: var(--dim); font-size: 13px; }
+  #status { margin-left: auto; color: var(--dim); font-size: 13px; text-align: right; }
+
+  #stage { position: relative; background: #000; border: 2px solid var(--edge); border-radius: 6px; display: flex; justify-content: center; overflow: hidden; }
+  #stage:fullscreen { align-items: center; border: 0; border-radius: 0; }
+  canvas { display: block; width: 100%; max-height: calc(100vh - 250px); aspect-ratio: 4 / 3; background: #000; object-fit: contain; image-rendering: pixelated; }
+  canvas.smooth { image-rendering: auto; }
+  #stage:fullscreen canvas { max-height: 100vh; width: auto; height: 100vh; }
+  #romPrompt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(10,9,7,.94); text-align: center; padding: 20px; }
+  #romPrompt[hidden] { display: none; }
+  #romPrompt p { margin: 0; max-width: 520px; color: var(--ink); }
+  #romMsg { color: #ff9a85; min-height: 1.5em; }
+  #note { color: var(--accent); font-size: 13px; min-height: 1.5em; margin: 6px 2px 0; }
+
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 10px; margin-top: 6px; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 1.6px; text-transform: uppercase; color: var(--dim); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .row.grow > * { flex: 1 1 auto; }
+
+  button, select, label.btn { background: var(--panel2); color: var(--ink); border: 1px solid var(--edge); border-radius: 4px; padding: 6px 11px; font: inherit; font-size: 14px; cursor: pointer; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+  button:hover, label.btn:hover, select:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, label.btn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.primary, label.btn.primary { background: #3a2f1c; border-color: #6b5732; color: #ffe2a3; }
+  button.quiet { background: transparent; color: var(--dim); }
+  button.danger:hover { border-color: #d65a4a; color: #ff9a85; }
+  button.tog::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #4a4234; box-shadow: inset 0 0 0 1px #00000066; }
+  button.tog.on { border-color: #8a6f33; color: #ffe2a3; }
+  button.tog.on::before { background: var(--ok); box-shadow: 0 0 5px var(--ok); }
+  select { padding: 5px 8px; max-width: 100%; }
+  input[type=file] { display: none; }
+
+  .drive { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: center; }
+  .drive b { font-weight: 600; color: var(--dim); font-size: 13px; }
+  .drive select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: #3a2a26; border: 1px solid #000; }
+  .led.on { background: var(--led); box-shadow: 0 0 6px var(--led); }
+  #trk { color: var(--dim); font-size: 12px; margin-left: auto; }
+
+  .pad { display: grid; grid-template-columns: repeat(7, minmax(40px, 1fr)); gap: 6px; }
+  .pad button { padding: 10px 0; }
+  details { margin-top: 12px; color: var(--dim); font-size: 14px; }
+  summary { cursor: pointer; color: var(--ink); }
+  kbd { background:#2a2116; border:1px solid var(--edge); border-radius:3px; padding:0 5px; font-size:12px; color:var(--ink); }
+  p { margin: 6px 0; }
+  @media (max-width: 520px) { #wrap { padding: 8px 10px 24px; } .pad button { padding: 12px 0; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1 id="title"></h1><span id="model"></span>
+    <span id="status" role="status">Starting&hellip;</span>
+  </header>
+
+  <div id="stage">
+    <canvas id="screen" width="560" height="384"></canvas>
+    <div id="romPrompt" hidden>
+      <p><strong>Apple II system ROM needed</strong></p>
+      <p>Choose the ROM image of the computer to emulate: a 12&nbsp;KB Apple&nbsp;II/II+ ROM or a 16&nbsp;KB Apple&nbsp;IIe / enhanced IIe ROM. Drop the file anywhere on this page, or pick it below. It stays in this browser. Game disk images (.dsk .po .nib or a .zip) can be dropped here too.</p>
+      <label class="btn primary">Choose ROM file<input type="file" id="romFile"></label>
+      <p id="romMsg" role="alert"></p>
+    </div>
+  </div>
+  <div id="note" role="status"></div>
+
+  <div class="panels">
+    <section class="card" aria-label="Disks">
+      <h2>Disks</h2>
+      <div class="drive"><span class="led" id="led1"></span><b>D1</b><select id="drive1" aria-label="Disk in drive 1"></select></div>
+      <div class="drive"><span class="led" id="led2"></span><b>D2</b><select id="drive2" aria-label="Disk in drive 2"></select></div>
+      <div class="row grow">
+        <label class="btn primary" title="Boot from disk images or a .zip of them (the first two go into drives 1 and 2)">Open game disk&hellip;<input type="file" id="bootFile" multiple accept=".dsk,.do,.po,.nib,.2mg,.zip"></label>
+        <label class="btn" title="Put a disk file into the drive chosen on the right without restarting">Swap disk&hellip;<input type="file" id="loadFile" accept=".dsk,.do,.po,.nib,.2mg,.zip"></label>
+        <select id="loadTarget" aria-label="Target drive"><option value="0">Drive 1</option><option value="1">Drive 2</option></select>
+      </div>
+      <div class="row grow">
+        <button id="btnSaveImg" title="Download the disk in the selected drive, including your changes">Download disk</button>
+        <button id="btnEraseSaves" class="danger" title="Forget every change made to the disks and restart">Discard saves</button>
+        <span id="trk" title="Head track">T0</span>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Computer">
+      <h2>Computer</h2>
+      <div class="row grow">
+        <button id="btnReset" title="Ctrl+F12">Reset</button>
+        <button id="btnPower">Power cycle</button>
+      </div>
+      <div class="row grow">
+        <label class="btn" title="Replace the system ROM (12 KB Apple ][/][+ or 16 KB //e). The disks in the drives stay.">Load system ROM&hellip;<input type="file" id="romFile2"></label>
+        <button id="btnForgetRom" class="quiet" title="Remove the ROM stored in this browser">Forget ROM</button>
+      </div>
+      <div class="row">
+        <select id="speed" aria-label="Speed"><option value="1">Speed 1x</option><option value="2">Speed 2x</option><option value="4">Speed 4x</option><option value="10">Speed max</option></select>
+        <button id="btnTurbo" class="tog" aria-pressed="true" title="Run faster while the disk is being read">Fast disk</button>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Input and sound">
+      <h2>Input &amp; sound</h2>
+      <div class="row">
+        <button id="btnSound" class="tog" aria-pressed="true">Sound</button>
+        <button id="btnCaps" class="tog" aria-pressed="true" title="Letters are typed as capitals">Caps lock</button>
+        <button id="btnJoy" class="tog" aria-pressed="false" title="Arrow keys move the stick, Space/Z and X are the buttons">Joystick keys</button>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Screen">
+      <h2>Screen</h2>
+      <div class="row">
+        <select id="display" aria-label="Display"><option value="color">Colour</option><option value="white">Mono white</option><option value="green">Mono green</option><option value="amber">Mono amber</option></select>
+        <select id="hgrMode" aria-label="Hi-res colour"><option value="sharp">Hi-res sharp</option><option value="ntsc">Hi-res NTSC</option></select>
+      </div>
+      <div class="row">
+        <button id="btnSmooth" class="tog" aria-pressed="false" title="Smooth instead of sharp pixels when scaling">Smooth pixels</button>
+        <button id="btnScan" class="tog" aria-pressed="false" title="Dim every other line">Scanlines</button>
+        <button id="btnFull">Fullscreen</button>
+      </div>
+    </section>
+  </div>
+
+  <details>
+    <summary>Touch keys</summary>
+    <div class="pad" style="margin-top:8px">
+      <button data-key="8" aria-label="Left">&#9664;</button>
+      <button data-key="11" aria-label="Up">&#9650;</button>
+      <button data-key="10" aria-label="Down">&#9660;</button>
+      <button data-key="21" aria-label="Right">&#9654;</button>
+      <button data-key="13">Return</button>
+      <button data-key="27">Esc</button>
+      <button data-key="32">Space</button>
+    </div>
+  </details>
+  <details>
+    <summary>Keys and saves</summary>
+    <p>Type normally. <kbd>Ctrl</kbd>+letter sends control characters. <kbd>Alt</kbd> is Open Apple (button 0), right <kbd>Alt</kbd> is Closed Apple (button 1). <kbd>Ctrl</kbd>+<kbd>F12</kbd> is Ctrl-Reset.</p>
+    <p>With &ldquo;Joystick keys&rdquo; on, the arrow keys move the stick and <kbd>Space</kbd>/<kbd>Z</kbd> and <kbd>X</kbd> are the two buttons. A connected gamepad works as well.</p>
+    <p>Changes written to a disk are kept in this browser and survive reloads. &ldquo;Download disk&rdquo; exports an image; &ldquo;Discard saves&rdquo; restores the original disks.</p>
+  </details>
+</div>
+<script>
+__SCRIPT__
+</script>
+</body>
+</html>

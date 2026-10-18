@@ -153,7 +153,7 @@
       if (f.type !== "A") throw this.fileError("FILE TYPE ERROR", 13);
       const key = f.disk + ":" + name + ":" + f.data.length;
       let p = this.programCache.get(key);
-      if (!p) { p = SS.parseProgram(f.raw || f.data, f.load); if (name === "START") patchStart(p);
+      if (!p) { p = SS.parseProgram(f.raw || f.data, f.load); p.name = name; if (name === "START") patchStart(p);
         patchTypingEcho(p); this.programCache.set(key, p); }
       return p;
     }

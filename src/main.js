@@ -69,7 +69,7 @@
   }
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.target && e.target.id === "kbd") return;
+    if (e.target && (e.target.id === "kbd" || (e.target.closest && e.target.closest("dialog")))) return;
     let code = KEYMAP[e.key];
     if (code === undefined && e.key.length === 1) {
       code = e.key.toUpperCase().charCodeAt(0);
@@ -124,7 +124,39 @@
     requestAnimationFrame(tick);
   }
 
+  SS.mountEditor(() => game, $("btnEdit"));
+
+  // ------------------------------------------------------------------ spellbook
+  const typeQueue = [];
+  let typingName = "";
+  SS.mountSpellbook($("spellsHolder"), (name) => {
+    if (game.status !== "waiting") {
+      setStatus("法術輸入：等遊戲出現 Cast what spell? 提示再點");
+      return;
+    }
+    typingName = name;
+    typeQueue.length = 0;
+    for (const ch of name.toUpperCase()) typeQueue.push(ch.charCodeAt(0));
+    typeQueue.push(13); // the game's input ends on Return
+  });
+
+  function feedTyping() {
+    if (!typeQueue.length) return;
+    if (game.status === "waiting") {
+      if (!game.m.hasKey()) {
+        const ch = typeQueue.shift();
+        game.m.pushKey(ch);
+        if (!typeQueue.length) setStatus("Spell typed: " + typingName + " — answer the game's prompts");
+        else setStatus("Typing: " + typingName);
+      }
+      return;
+    }
+    if (!game.m.hasKey()) typeQueue.length = 0; // prompt was cancelled/left; drop the rest
+  }
+
   boot();
+  const _oldTick = tick;
+  tick = function (ts) { feedTyping(); _oldTick(ts); };
   requestAnimationFrame(tick);
   window.__game = () => game;
 })(window.SS);
