@@ -1,12 +1,13 @@
 // Builds a self-contained Apple II emulator page for any game: dist/<game_name>.html
 //
 //   node tools/build.js <game.zip | disk.dsk | folder> [more disks...] [--rom system.rom] [--disk-rom p5a.rom]
-//                       [--name "Game Name"] [--out dist]
+//                       [--name "Game Name"] [--out dist] [--extras extra.js ...]
 //   node tools/build.js [--rom system.rom]        -> dist/apple2.html, a generic emulator that loads disks in the page
 //
 // The game images (.dsk .do .po .nib .2mg, optionally inside .zip files) are embedded in the page. The Apple II
 // system ROM (12 KB II/II+ or 16 KB IIe/enhanced IIe) is embedded when --rom (or $APPLE2_ROM) is given; otherwise
-// the page asks for it on first load and remembers it in the browser.
+// the page asks for it on first load and remembers it in the browser. --extras appends game-specific script
+// (trainer panels, spell tables, ...) after the emulator UI code.
 const fs = require("fs"), path = require("path");
 const { readZip } = require("./lib/zip.js");
 
@@ -20,7 +21,7 @@ function usage(msg) {
 }
 
 function parseArgs(argv) {
-  const o = { inputs: [], out: path.join(root, "dist") };
+  const o = { inputs: [], out: path.join(root, "dist"), extras: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { if (i + 1 >= argv.length) usage(a + " needs a value"); return argv[++i]; };
@@ -28,6 +29,7 @@ function parseArgs(argv) {
     else if (a === "--disk-rom") o.diskRom = val();
     else if (a === "--name") o.name = val();
     else if (a === "--out") o.out = path.resolve(val());
+    else if (a === "--extras") o.extras.push(path.resolve(val()));
     else if (a === "-h" || a === "--help") usage();
     else if (a.startsWith("--")) usage("unknown option " + a);
     else o.inputs.push(a);
@@ -96,6 +98,7 @@ function main() {
   };
   let js = "var A2 = {};\nvar A2CFG = " + JSON.stringify(cfg) + ";\n";
   for (const f of ["cpu65", "disk", "machine", "video", "ui"]) js += "\n" + fs.readFileSync(path.join(root, "src/a2", f + ".js"), "utf8");
+  for (const f of o.extras) js += "\n" + fs.readFileSync(f, "utf8");
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const html = fs.readFileSync(path.join(root, "tools/template_a2.html"), "utf8")
     .replace("__TITLE__", () => esc(title))
@@ -107,6 +110,7 @@ function main() {
   console.log("  game:  " + title);
   console.log("  disks: " + (disks.length ? disks.map((d) => d.name).join(", ") : "none embedded - load them in the page"));
   console.log("  ROM:   " + (rom ? o.rom + " (" + rom.length + " bytes, embedded)" : "not embedded - the page will ask for it"));
+  if (o.extras.length) console.log("  extras: " + o.extras.map((f) => path.basename(f)).join(", "));
 }
 
 main();
